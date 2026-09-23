@@ -115,7 +115,7 @@ begin
                                   partnership_start_date, status, payout_method, payout_account_name, payout_account_number,
                                   installation_checklist, notes)
     values (v_loc[k], v_names[k][1], v_names[k][2], v_names[k][3], '0917 555 01' || lpad((10 + k)::text, 2, '0'),
-            '9:00 AM – 9:00 PM', v_names[k][4], v_open, 'pending', 'gcash', v_names[k][1], '0918 555 02' || lpad((10 + k)::text, 2, '0'),
+            '9:00 AM – 9:00 PM', v_names[k][4], v_open + 1, 'pending', 'gcash', v_names[k][1], '0918 555 02' || lpad((10 + k)::text, 2, '0'),
             '{"machine_installed":true,"machine_tested":true,"staff_trained":true,"signage":true,"cleaning_kit":true,"app_login_tested":true}',
             'Demo location');
 

@@ -111,27 +111,33 @@ grant execute on function private.today_ph(), private.seed_mode(), private.curre
   private.is_admin(), private.is_team(), private.my_location_id(), private.can_access_location(uuid)
   to authenticated, service_role;
 
--- Create a profile automatically for each new auth user. Role and location
--- come from app_metadata, which only the service role can set.
+-- Create/refresh a profile for each auth user. Role and location come from
+-- app_metadata, which only the service role can set. GoTrue may write
+-- app_metadata in a separate UPDATE after the INSERT, so both are handled.
 create or replace function private.handle_new_user()
 returns trigger
 language plpgsql security definer set search_path = ''
 as $$
+declare
+  v_role public.user_role := coalesce((new.raw_app_meta_data ->> 'role')::public.user_role, 'partner');
+  v_loc uuid := nullif(new.raw_app_meta_data ->> 'location_id', '')::uuid;
 begin
   insert into public.profiles (id, role, full_name, location_id)
-  values (
-    new.id,
-    coalesce((new.raw_app_meta_data ->> 'role')::public.user_role, 'partner'),
-    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
-    nullif(new.raw_app_meta_data ->> 'location_id', '')::uuid
-  )
-  on conflict (id) do nothing;
+  values (new.id, v_role, coalesce(new.raw_user_meta_data ->> 'full_name', ''), v_loc)
+  on conflict (id) do update
+    set role = case when new.raw_app_meta_data ? 'role' then excluded.role else public.profiles.role end,
+        location_id = case when new.raw_app_meta_data ? 'location_id' then excluded.location_id else public.profiles.location_id end,
+        full_name = case when public.profiles.full_name = '' then excluded.full_name else public.profiles.full_name end;
   return new;
 end $$;
 
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function private.handle_new_user();
+create trigger on_auth_user_app_metadata_changed
+  after update of raw_app_meta_data on auth.users
+  for each row when (old.raw_app_meta_data is distinct from new.raw_app_meta_data)
+  execute function private.handle_new_user();
 
 -- ---------------------------------------------------------------------
 -- Global settings (singleton row id = 1)

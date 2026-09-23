@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Soft-Serve Partners
 
-## Getting Started
+Web app for running a network of soft-serve machines in partner stores under a 50/50 profit share.
+The owner supplies machine + inventory; each store reports daily (machine counter, cone/cup count,
+sales), remits 100% of sales with a receipt, and gets its share after a weekly audit.
 
-First, run the development server:
+**Stack:** Next.js 16 (App Router) · TypeScript · Tailwind v4 · shadcn/ui (Base UI) · Supabase (Postgres, Auth, RLS, Storage) · Vercel.
+
+## Status
+
+| Phase | Scope | State |
+|---|---|---|
+| **1 — Daily loop** | Schema + RLS, admin onboarding, partner PIN login, end-of-day wizard, admin inbox (verify/reject remittances, resolve discrepancies, missed days), deliveries + partner confirmation, stock & reorder queue, settings | ✅ built |
+| 2 — Audit & payout | DB layer done (audits, inventory counts, reconciliation, statements, payouts — all RPCs + immutability + seed). Partner can already view audit summaries, statements, acknowledge, confirm payout. | ⏳ admin screens next |
+| 3 — Scale | Dashboard, audit history, CSV export | ⏳ |
+
+## Quick start (local)
 
 ```bash
+npm install
+npx supabase start          # needs Docker
+npx supabase db reset       # applies migrations + supabase/seed.sql
+cp .env.example .env.local  # fill in URL / anon key / service role key from `supabase status`
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Hosted Supabase: `npx supabase link` → `npx supabase db push`, then load the demo data with
+`psql "$DATABASE_URL" -f supabase/seed.sql` (optional). In the dashboard, **disable public sign-ups**
+(Auth → Providers → Email); accounts are created by the admin only.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Demo logins (seed)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Who | Login |
+|---|---|
+| Owner (admin) | `admin@example.com` / `demo1234` |
+| Field staff | `staff@example.com` / `demo1234` |
+| Stores | code `SS-001` PIN `111111` · `SS-002` / `222222` · `SS-003` / `333333` |
 
-## Learn More
+The seed builds two weeks of history relative to *today* (Asia/Manila): mostly matched days, a few minor
+discrepancies, one major unexplained one (SS-001), verified/pending/rejected remittances, one completed
+audit → confirmed reconciliation → paid + acknowledged payout (SS-001), and a scheduled audit for this week.
+Today is left empty so you can run the end-of-day wizard as any store.
 
-To learn more about Next.js, take a look at the following resources:
+## How it works
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Daily three-way check
+For each store/day the database computes, whenever any input arrives:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **A** counter delta = today's reading − previous reading (walking recorded resets/rollovers)
+- **B** reported servings = Σ (qty + free qty) × servings per unit
+- **C** container servings = cones used + cups used (+ servings of products without a container / extra servings of multi-serving products, so it's comparable to A/B)
 
-## Deploy on Vercel
+`max(|A−B|, |A−C|, |B−C|)` ≤ tolerance → **matched**; ≤ major threshold → **minor**; else **major**.
+Discrepancies never block the remittance; they queue in the admin inbox with the counter photo and the
+store's explanation.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Where rules are enforced
+All daily-loop writes go through `SECURITY DEFINER` RPCs (`submit_counter_reading`, `submit_container_count`,
+`submit_sales_report`, `submit_remittance`, `verify_remittance`, `record_delivery`, …). Partners have
+**select-only** table access, scoped to their location by RLS. Immutability (submitted readings, verified
+remittances, completed audits, confirmed reconciliations, statements, payouts) is enforced by triggers.
+Every mutation is written to `activity_log`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Folder map
+```
+supabase/migrations/   schema, RPCs, RLS, storage, views (5 files, in order)
+supabase/seed.sql      demo data, written through the same RPCs
+supabase/tests/        plain-Postgres harness + RLS/business-rule tests
+src/app/login          store code + PIN / team email + password
+src/app/p              partner (mobile): home, end-of-day wizard, history, stock, deliveries, statements
+src/app/admin          inbox, locations/onboarding, deliveries, stock, settings
+```
+
+### Tests
+```bash
+# requires a local Postgres 15+ (no Docker needed)
+DB=softserve_test supabase/tests/reset_local.sh --seed
+psql -d softserve_test -f supabase/tests/rls_and_rules.sql   # prints PASS lines, ends with ALL TESTS PASSED
+```
+
+## Defaults chosen (change if they don't match your rules)
+
+- **Login:** stores sign in with **store code + 6-digit PIN** (maps to a hidden `ss-001@PARTNER_EMAIL_DOMAIN`
+  Supabase account). Owner resets PINs from the location page. Team uses email + password.
+- **Late entries:** a store can submit for **today or yesterday** only; older days must be entered by the owner.
+  Remittances for older days can be (re)sent any time.
+- **Discrepancy severity:** matched ≤ ±3, minor ≤ 10, major > 10 servings (both per location, defaults in Settings).
+- **Deliveries** dated day D count toward D's closing cone/cup count.
+- **Counter:** a lower reading is rejected unless an admin recorded a reset. An automatic rollover is
+  accepted only if the previous reading was within 1,000 of the counter max and the implied servings ≤ 2,000
+  (recorded as a `rollover` machine event). A mistyped reading is fixed by the admin via *Correct a reading*;
+  the submitted value stays on record and a `correction` event is logged.
+- **Sales payments must add up:** cash + GCash + other = net sales (gross − discounts − refunds).
+- **₱0 days** (closed / no sales) auto-verify the remittance — no receipt needed.
+- **Partial remittance:** the admin can verify whatever was actually sent; the shortfall stays outstanding.
+- **Reconciliation:** profit = sales − (product cost from consumption × unit cost, GCash/other fees %, weekly
+  maintenance reserve, stock loss from audit counts, delivery fees). Partner share is computed on profit, then
+  automatic adjustments are **deducted from the partner's share**: sales not yet remitted/verified (the store
+  still holds that cash) and, for unexplained major discrepancies, unreported servings × average price per paid serving.
+- **Payout** must equal the confirmed partner payable (one payout per reconciliation).
+- Remittance destination: global GCash/bank in Settings, overridable per location.
+
+## Environment
+
+See `.env.example`. `SUPABASE_SERVICE_ROLE_KEY` is only used server-side to create/reset partner logins.

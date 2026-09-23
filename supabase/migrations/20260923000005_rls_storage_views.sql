@@ -165,7 +165,7 @@ left join (
 left join public.stock_levels sl on sl.location_id = l.id and sl.item_id = i.id
 where i.is_active and l.status in ('pending', 'active', 'paused');
 
--- Daily flow status: one row per location per day since opening (max 60 days)
+-- Daily flow status: one row per location per trading day since the partnership start (max 60 days)
 create view public.v_daily_status with (security_invoker = true) as
 select
   l.id as location_id,
@@ -181,7 +181,8 @@ select
   (select ch.resolved_at is not null from public.daily_checks ch where ch.location_id = l.id and ch.business_date = d::date) as check_resolved
 from public.locations l
 cross join lateral generate_series(
-  greatest(coalesce(l.opening_count_date, private.today_ph()), private.today_ph() - 59),
+  -- first trading day = partnership start date (falls back to the opening count date)
+  greatest(coalesce(l.partnership_start_date, l.opening_count_date, private.today_ph()), private.today_ph() - 59),
   private.today_ph(), interval '1 day') d
 where l.status = 'active';
 
