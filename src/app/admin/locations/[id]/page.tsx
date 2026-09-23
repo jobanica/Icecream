@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -83,6 +84,9 @@ export default async function LocationDetail({ params }: { params: Promise<{ id:
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href={`/admin/locations/${id}/insights`} className="text-sm underline">
+            Insights & audit history
+          </Link>
           <Pill t={l.status === "active" ? "green" : l.status === "pending" ? "amber" : "gray"} className="text-sm">
             {l.status.toUpperCase()}
           </Pill>

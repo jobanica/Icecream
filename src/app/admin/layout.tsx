@@ -6,7 +6,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const profile = await requireRole("admin", "staff");
   const isAdmin = profile.role === "admin";
   const links = [
-    ...(isAdmin ? [{ href: "/admin", label: "Inbox" }] : []),
+    ...(isAdmin
+      ? [
+          { href: "/admin", label: "Inbox" },
+          { href: "/admin/dashboard", label: "Dashboard" },
+        ]
+      : []),
     { href: "/admin/locations", label: "Locations" },
     { href: "/admin/deliveries", label: "Deliveries" },
     { href: "/admin/stock", label: "Stock" },
@@ -14,6 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ...(isAdmin
       ? [
           { href: "/admin/reconciliations", label: "Payouts" },
+          { href: "/admin/export", label: "Export" },
           { href: "/admin/settings", label: "Settings" },
         ]
       : []),
@@ -33,7 +39,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             ))}
           </nav>
           <form action={signOut} className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="hidden md:inline">
+            <span className="hidden xl:inline">
               {profile.full_name} · {profile.role}
             </span>
             <button className="underline">Sign out</button>

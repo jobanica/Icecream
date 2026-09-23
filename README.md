@@ -12,7 +12,7 @@ sales), remits 100% of sales with a receipt, and gets its share after a weekly a
 |---|---|---|
 | **1 — Daily loop** | Schema + RLS, admin onboarding, partner PIN login, end-of-day wizard, admin inbox (verify/reject remittances, resolve discrepancies, missed days), deliveries + partner confirmation, stock & reorder queue, settings | ✅ built |
 | **2 — Audit & payout** | Weekly audit on a phone (checklist with photos, counter-photo spot check, full inventory count with live variance, week's discrepancies, findings) → auto summary (full + partner version) → one-click reconciliation (editable deductions, auto + manual adjustments) → confirm → statement → payout with proof → partner acknowledges + confirms receipt. Statement PDF download. | ✅ built |
-| 3 — Scale | Dashboard, audit history, CSV export | ⏳ |
+| **3 — Scale** | Dashboard (all locations: sales, remittance compliance, days complete/missed, matched days, open flags, last audit score, net profit, shares paid/pending, stock health 🟢🟡🔴, outstanding; date presets + custom range). Per-location insights: daily sales + counter-vs-sales-vs-containers trend chart, audit score & discrepancy-rate history, recurring checklist failures. CSV export of every dataset (or one ZIP), by date range and location. | ✅ built |
 
 ## Quick start (local)
 
@@ -69,6 +69,7 @@ supabase/tests/        plain-Postgres harness + RLS/business-rule tests
 src/app/login          store code + PIN / team email + password
 src/app/p              partner (mobile): home, end-of-day wizard, history, stock, deliveries, statements
 src/app/admin          inbox, locations/onboarding, deliveries, stock, audits, reconciliations/payouts, settings
+src/app/admin/dashboard, admin/locations/[id]/insights, admin/export   phase 3
 src/app/statements     statement PDF download (RLS-scoped, works for admin and partner)
 ```
 
@@ -107,6 +108,10 @@ psql -d softserve_test -f supabase/tests/rls_and_rules.sql   # prints PASS lines
 - **Audits:** staff and admin conduct audits; only admin reconciles and pays. A scheduled audit that hasn't
   started can be deleted; checklist answers need a started audit; completed audits are permanent.
 - **Statement PDF** uses "PHP" instead of "₱" (the built-in PDF fonts have no peso sign).
+- **Dashboard:** "days complete" counts finished days only (today is in progress). Net profit and paid shares
+  come from reconciliations / payouts dated inside the range; pending shares and outstanding are all-time.
+- **CSV:** UTF-8 with BOM (opens cleanly in Excel); every `_centavos` column has a `_php` twin; JSON columns
+  (audit summaries, statement snapshots, activity-log diffs) are exported as JSON text.
 - Remittance destination: global GCash/bank in Settings, overridable per location.
 
 ## Environment

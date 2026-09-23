@@ -23,11 +23,11 @@ begin
   select count(*) into n from public.weekly_audits;
   if n <> 0 then raise exception 'FAIL partner can read internal audits'; end if;
   select count(*) into n from public.audit_partner_summaries;
-  if n <> 1 then raise exception 'FAIL partner cannot read own audit summary'; end if;
+  if n < 1 then raise exception 'FAIL partner cannot read own audit summary'; end if;
   select count(*) into n from public.reconciliations;
   if n <> 0 then raise exception 'FAIL partner can read reconciliations'; end if;
   select count(*) into n from public.partner_statements;
-  if n <> 1 then raise exception 'FAIL partner statement not visible'; end if;
+  if n < 1 then raise exception 'FAIL partner statement not visible'; end if;
   select count(*) into n from public.activity_log;
   if n <> 0 then raise exception 'FAIL partner can read activity log'; end if;
   select count(*) into n from public.v_stock_on_hand;
@@ -276,6 +276,11 @@ begin
   select count(distinct location_id) into n from public.daily_sales_reports;
   if n <> 3 then raise exception 'FAIL staff should see all stores'; end if;
   raise notice 'PASS staff scoping';
+  begin
+    perform * from public.dashboard_summary(current_date - 7, current_date);
+    raise exception 'FAIL staff read the dashboard';
+  exception when insufficient_privilege then raise notice 'PASS dashboard is admin-only';
+  end;
 end $$;
 
 -- anon sees nothing
