@@ -57,13 +57,14 @@ as $$ select (now() at time zone 'Asia/Manila')::date $$;
 
 -- Seed mode lets supabase/seed.sql write historical data through the same
 -- RPCs (bypasses "today/yesterday only" and immutability guards).
--- Only honoured for direct database sessions (psql / SQL editor as postgres);
--- API requests arrive as session_user 'authenticator' and can never use it.
+-- Only honoured for direct database sessions (psql, SQL editor, Supabase CLI);
+-- API requests arrive as one of the API login roles and can never use it.
 create or replace function private.seed_mode()
 returns boolean language sql stable
 as $$
   select coalesce(current_setting('app.seed_mode', true), '') = 'on'
-     and session_user in ('postgres', 'supabase_admin')
+     and session_user not in ('authenticator', 'anon', 'authenticated', 'service_role',
+                              'supabase_auth_admin', 'supabase_storage_admin', 'pgbouncer')
 $$;
 
 -- ---------------------------------------------------------------------

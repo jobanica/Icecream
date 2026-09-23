@@ -14,6 +14,10 @@ sales), remits 100% of sales with a receipt, and gets its share after a weekly a
 | **2 — Audit & payout** | Weekly audit on a phone (checklist with photos, counter-photo spot check, full inventory count with live variance, week's discrepancies, findings) → auto summary (full + partner version) → one-click reconciliation (editable deductions, auto + manual adjustments) → confirm → statement → payout with proof → partner acknowledges + confirms receipt. Statement PDF download. | ✅ built |
 | **3 — Scale** | Dashboard (all locations: sales, remittance compliance, days complete/missed, matched days, open flags, last audit score, net profit, shares paid/pending, stock health 🟢🟡🔴, outstanding; date presets + custom range). Per-location insights: daily sales + counter-vs-sales-vs-containers trend chart, audit score & discrepancy-rate history, recurring checklist failures. CSV export of every dataset (or one ZIP), by date range and location. | ✅ built |
 
+## Deploying
+
+See **[DEPLOY.md](DEPLOY.md)** (Supabase project → schema + demo data → Vercel with env vars).
+
 ## Quick start (local)
 
 ```bash

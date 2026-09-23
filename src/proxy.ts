@@ -4,6 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 /** Keeps the Supabase session cookie fresh and bounces signed-out users to /login. */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
+  // Not configured yet (no Supabase env): let /login explain instead of crashing
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return request.nextUrl.pathname === "/login" ? response : NextResponse.redirect(new URL("/login", request.url));
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
