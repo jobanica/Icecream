@@ -11,7 +11,7 @@ sales), remits 100% of sales with a receipt, and gets its share after a weekly a
 | Phase | Scope | State |
 |---|---|---|
 | **1 — Daily loop** | Schema + RLS, admin onboarding, partner PIN login, end-of-day wizard, admin inbox (verify/reject remittances, resolve discrepancies, missed days), deliveries + partner confirmation, stock & reorder queue, settings | ✅ built |
-| 2 — Audit & payout | DB layer done (audits, inventory counts, reconciliation, statements, payouts — all RPCs + immutability + seed). Partner can already view audit summaries, statements, acknowledge, confirm payout. | ⏳ admin screens next |
+| **2 — Audit & payout** | Weekly audit on a phone (checklist with photos, counter-photo spot check, full inventory count with live variance, week's discrepancies, findings) → auto summary (full + partner version) → one-click reconciliation (editable deductions, auto + manual adjustments) → confirm → statement → payout with proof → partner acknowledges + confirms receipt. Statement PDF download. | ✅ built |
 | 3 — Scale | Dashboard, audit history, CSV export | ⏳ |
 
 ## Quick start (local)
@@ -68,7 +68,8 @@ supabase/seed.sql      demo data, written through the same RPCs
 supabase/tests/        plain-Postgres harness + RLS/business-rule tests
 src/app/login          store code + PIN / team email + password
 src/app/p              partner (mobile): home, end-of-day wizard, history, stock, deliveries, statements
-src/app/admin          inbox, locations/onboarding, deliveries, stock, settings
+src/app/admin          inbox, locations/onboarding, deliveries, stock, audits, reconciliations/payouts, settings
+src/app/statements     statement PDF download (RLS-scoped, works for admin and partner)
 ```
 
 ### Tests
@@ -97,7 +98,15 @@ psql -d softserve_test -f supabase/tests/rls_and_rules.sql   # prints PASS lines
   maintenance reserve, stock loss from audit counts, delivery fees). Partner share is computed on profit, then
   automatic adjustments are **deducted from the partner's share**: sales not yet remitted/verified (the store
   still holds that cash) and, for unexplained major discrepancies, unreported servings × average price per paid serving.
-- **Payout** must equal the confirmed partner payable (one payout per reconciliation).
+- **Payout** must equal the confirmed partner payable (one payout per reconciliation). If the payable is ₱0 or
+  negative, no payout is recorded; carry a negative balance as a manual adjustment next period.
+- **Verify remittances before reconciling.** Sent-but-unverified remittances count as unremitted. The draft
+  reconciliation warns about this and can be discarded and re-created; confirmed ones are permanent.
+- **Audit inventory count** compares against system stock at the end of the audit period — count before the
+  store starts selling on the visit day. A recount is allowed (both kept; the latest is used in the summary).
+- **Audits:** staff and admin conduct audits; only admin reconciles and pays. A scheduled audit that hasn't
+  started can be deleted; checklist answers need a started audit; completed audits are permanent.
+- **Statement PDF** uses "PHP" instead of "₱" (the built-in PDF fonts have no peso sign).
 - Remittance destination: global GCash/bank in Settings, overridable per location.
 
 ## Environment

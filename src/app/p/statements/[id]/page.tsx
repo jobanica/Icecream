@@ -13,6 +13,9 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
   if (!st) notFound();
   return (
     <div className="space-y-6">
+      <a href={`/statements/${st.id}/pdf`} className="block rounded-lg border py-3 text-center text-sm font-medium underline">
+        Download PDF
+      </a>
       <StatementView snapshot={st.snapshot} statementNo={st.statement_no} />
       <div className="rounded-xl border p-4">
         {st.acknowledged_at ? (

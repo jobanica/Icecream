@@ -210,6 +210,60 @@ begin
   raise notice 'PASS automatic rollover';
 end $$;
 
+-- phase 2: audits only change through RPCs; draft reconciliation lifecycle
+reset role;
+select pg_temp.act_as('00000000-0000-4000-a000-000000000002');
+set role authenticated;
+do $$
+declare a public.weekly_audits; n int;
+begin
+  select * into a from public.weekly_audits where status = 'scheduled' limit 1;
+  update public.weekly_audits set status = 'completed' where id = a.id;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FAIL staff updated audit status directly'; end if;
+  begin
+    perform public.set_audit_item((select id from public.audit_items where audit_id = a.id limit 1), 'pass', null, null);
+    raise exception 'FAIL answered checklist before starting';
+  exception when raise_exception then raise notice 'PASS checklist needs a started audit';
+  end;
+  a := public.start_audit(a.id);
+  update public.audit_items set result = 'pass' where audit_id = a.id;  -- blocked by RLS (no policy)
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FAIL staff updated audit items directly'; end if;
+  perform public.set_audit_item(i.id, 'pass', null, null) from public.audit_items i where i.audit_id = a.id;
+  a := public.complete_audit(a.id);
+  if a.score_passed <> 25 then raise exception 'FAIL score %', a.score_passed; end if;
+  begin
+    perform public.create_reconciliation(a.id);
+    raise exception 'FAIL staff created reconciliation';
+  exception when insufficient_privilege then raise notice 'PASS reconciliation is admin-only';
+  end;
+end $$;
+
+reset role;
+select pg_temp.act_as('00000000-0000-4000-a000-000000000001');
+set role authenticated;
+do $$
+declare a uuid; r public.reconciliations; r2 public.reconciliations;
+begin
+  select id into a from public.weekly_audits w where status = 'completed'
+     and not exists (select 1 from public.reconciliations x where x.audit_id = w.id) limit 1;
+  r := public.create_reconciliation(a);
+  if public.delete_draft_reconciliation(r.id) <> a then raise exception 'FAIL discard draft'; end if;
+  r2 := public.create_reconciliation(a);
+  perform public.confirm_reconciliation(r2.id);
+  begin
+    perform public.delete_draft_reconciliation(r2.id);
+    raise exception 'FAIL deleted confirmed reconciliation';
+  exception when raise_exception then raise notice 'PASS confirmed reconciliation cannot be discarded';
+  end;
+  begin
+    perform public.record_payout(r2.id, (select partner_payable_centavos from public.reconciliations where id = r2.id) + 1, 'gcash', 'X', 'x', current_date);
+    raise exception 'FAIL wrong payout amount accepted';
+  exception when raise_exception then raise notice 'PASS payout must equal payable';
+  end;
+end $$;
+
 -- staff can not verify remittances or read reconciliations
 reset role;
 select pg_temp.act_as('00000000-0000-4000-a000-000000000002');

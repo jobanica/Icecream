@@ -10,7 +10,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/locations", label: "Locations" },
     { href: "/admin/deliveries", label: "Deliveries" },
     { href: "/admin/stock", label: "Stock" },
-    ...(isAdmin ? [{ href: "/admin/settings", label: "Settings" }] : []),
+    { href: "/admin/audits", label: "Audits" },
+    ...(isAdmin
+      ? [
+          { href: "/admin/reconciliations", label: "Payouts" },
+          { href: "/admin/settings", label: "Settings" },
+        ]
+      : []),
   ];
   return (
     <div className="min-h-dvh bg-muted/40">
